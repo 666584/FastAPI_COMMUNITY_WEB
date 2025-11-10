@@ -1,0 +1,12 @@
+[project]
+name = "Community Web"
+version = "0.0.0"
+requires-python = ">= 3.8"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.27",
+]
+
+# 선택: 개발 도구
+[project.optional-dependencies]
+dev = ["pytest", "httpx", "ruff", "mypy"]
