@@ -25,39 +25,34 @@ def create_user(data: dict):
     password2 = data.get("password2")
     profile = data.get("profile")
 
-    if not username or not email:
-        raise HTTPException(status_code=400, detail="missing_required_fields")
+    # Profile validation
+    if not profile:
+        raise HTTPException(status_code=400, detail="missing_profile")
+    if profile and len(profile) > 500:
+        raise HTTPException(status_code=400, detail="profile_too_long")
+    
+    # Username validation
+    if not username:
+        raise HTTPException(status_code=400, detail="missing_username")
+    if any(u["username"] == username for u in users):
+        raise HTTPException(status_code=403, detail="username_already_exists")
+    if " " in username:
+        raise HTTPException(status_code=400, detail="username_contains_space")
+    if len(username) > 10:
+        raise HTTPException(status_code=400, detail="username_too_long")
+    if username.lower() in {"admin", "root", "system"}:
+        raise HTTPException(status_code=400, detail="username_reserved")
+
+    # Password complexity checks
     if not password1:
         raise HTTPException(status_code=400, detail="missing_password")
     if not password2:
         raise HTTPException(status_code=400, detail="missing_password_confirmation")
     if password1 != password2:
-        raise HTTPException(status_code=400, detail="passwords_do_not_match")
-    if any(u["username"] == username for u in users):
-        raise HTTPException(status_code=403, detail="username_already_exists")
-    if profile and len(profile) > 500:
-        raise HTTPException(status_code=400, detail="profile_too_long")
-    
-    # Username validation
-    if " " in username:
-        raise HTTPException(status_code=400, detail="username_contains_space")
-    if len(username) < 3:
-        raise HTTPException(status_code=400, detail="username_too_short")
-    if len(username) > 30:
-        raise HTTPException(status_code=400, detail="username_too_long")
-    if not username.isalnum():
-        raise HTTPException(status_code=400, detail="username_invalid_characters")
-    if not username[0].isalpha():
-        raise HTTPException(status_code=400, detail="username_must_start_with_letter")
-    if username.isdigit():
-        raise HTTPException(status_code=400, detail="username_cannot_be_all_numbers")
-    if username.lower() in {"admin", "root", "system"}:
-        raise HTTPException(status_code=400, detail="username_reserved")
-
-    # Password complexity checks
+        raise HTTPException(status_code=400, detail="passwords_do_not_match")    
     if len(password1) < 8:
         raise HTTPException(status_code=400, detail="password_too_short")
-    if len(password1) > 64:
+    if len(password1) > 20:
         raise HTTPException(status_code=400, detail="password_too_long")
     if " " in password1:
         raise HTTPException(status_code=400, detail="password_contains_space")
@@ -99,12 +94,19 @@ def create_user(data: dict):
 
 @router.post("/login")
 def login(data: dict):
-    username = data.get("username")
+    email = data.get("email")
     password = data.get("password")
 
-    if not username:
-        raise HTTPException(status_code=400, detail="missing_username")
-    user = next((u for u in users if u["username"] == username), None)
+    if not email:
+        raise HTTPException(status_code=400, detail="missing_email")
+    if not isinstance(email, str) or "@" not in email:
+        raise HTTPException(status_code=400, detail="invalid_email_format")
+    if len(email) > 254:
+        raise HTTPException(status_code=400, detail="email_too_long")
+    if len(email) < 5:
+        raise HTTPException(status_code=400, detail="email_too_short")
+    
+    user = next((u for u in users if u["email"] == email), None)
     if not user:
         raise HTTPException(status_code=401, detail="unauthorized")
     if not password:
@@ -113,3 +115,84 @@ def login(data: dict):
         raise HTTPException(status_code=401, detail="unauthorized")
 
     return {"status_code": 200, "data": {"user_id": user["id"], "username": user["username"]}}
+
+@router.patch("/change_password")
+def change_password(data: dict): 
+    user_id = data.get("user_id")
+    password1 = data.get("password1")
+    password2 = data.get("password2")
+    user = next((u for u in users if u["id"] == user_id), None)
+    if not user:
+        raise HTTPException(status_code=404, detail="user_not_found")   
+    
+    # Password complexity checks
+    if not password1:
+        raise HTTPException(status_code=400, detail="missing_password")
+    if not password2:
+        raise HTTPException(status_code=400, detail="missing_password_confirmation")
+    if password1 != password2:
+        raise HTTPException(status_code=400, detail="passwords_do_not_match")    
+    if len(password1) < 8:
+        raise HTTPException(status_code=400, detail="password_too_short")
+    if len(password1) > 20:
+        raise HTTPException(status_code=400, detail="password_too_long")
+    if " " in password1:
+        raise HTTPException(status_code=400, detail="password_contains_space")
+    if not any(c.islower() for c in password1):
+        raise HTTPException(status_code=400, detail="password_missing_lowercase")
+    if not any(c.isupper() for c in password1):
+        raise HTTPException(status_code=400, detail="password_missing_uppercase")
+    if not any(c.isdigit() for c in password1):
+        raise HTTPException(status_code=400, detail="password_missing_digit")
+    if not any(c in "!@#$%^&*()-_=+[]{}|;:'\",.<>?/`~" for c in password1):
+        raise HTTPException(status_code=400, detail="password_missing_special_character")
+    
+    user["password"] = password1
+    return {"status_code": 200, "data": "password_changed_successfully"}
+
+@router.put("/update_profile")
+def update_profile(data: dict):
+    user_id = data.get("user_id")
+    profile = data.get("profile")
+    user = next((u for u in users if u["id"] == user_id), None)
+    if not user:
+        raise HTTPException(status_code=404, detail="user_not_found")   
+    
+    if not profile:
+        raise HTTPException(status_code=400, detail="missing_profile")
+    if len(profile) > 500:
+        raise HTTPException(status_code=400, detail="profile_too_long")
+    
+    user["profile"] = profile
+    return {"status_code": 200, "data": "profile_updated_successfully"}
+
+@router.patch("/update_username")
+def update_username(data: dict):
+    user_id = data.get("user_id")
+    new_username = data.get("new_username")
+    user = next((u for u in users if u["id"] == user_id), None)
+    if not user:
+        raise HTTPException(status_code=404, detail="user_not_found")   
+    
+    # Username validation
+    if not new_username:
+        raise HTTPException(status_code=400, detail="missing_username")
+    if any(u["username"] == new_username for u in users):
+        raise HTTPException(status_code=403, detail="username_already_exists")
+    if " " in new_username:
+        raise HTTPException(status_code=400, detail="username_contains_space")
+    if len(new_username) > 10:
+        raise HTTPException(status_code=400, detail="username_too_long")
+    if new_username.lower() in {"admin", "root", "system"}:
+        raise HTTPException(status_code=400, detail="username_reserved")
+    
+    user["username"] = new_username
+    return {"status_code": 200, "data": "username_updated_successfully"}
+
+@router.delete("/delete/{user_id}")
+def delete_user(user_id: int):
+    user = next((u for u in users if u["id"] == user_id), None)
+    if not user:
+        raise HTTPException(status_code=404, detail="user_not_found")
+    users.remove(user)
+    return {"status_code": 200, "data": "user_deleted_successfully"}
