@@ -1,15 +1,24 @@
 # routers/comment_router.py
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
+from pydantic import BaseModel
+from post_router import update_comments_count
 
 router = APIRouter(prefix="/comments")
+
+class Comment(BaseModel):
+    id : int
+    post_id : int
+    author_id : int 
+    content : str
+    datetime : datetime
 
 comments = [
     {"id": 1, "post_id": 1, "author_id": 2, "content": "Great post!", "datetime": "2024-01-02T14:00:00"},
 ]
 
-@router.get("/{comment_id}")
-def get_comment(comment_id: int):
+@router.get("/{post_id}")
+async def get_comments(comment_id: int):
     if comment_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_comment_id")
     comment = next((c for c in comments if c["id"] == comment_id), None)
@@ -17,8 +26,8 @@ def get_comment(comment_id: int):
         raise HTTPException(status_code=404, detail="comment_not_found")
     return {"status_code": 200, "data": comment} 
 
-@router.post("/{post_id}/create", status_code=201)
-def create_comment(post_id: int, data: dict):
+@router.post("/create", status_code=201)
+async def create_comment(post_id: int, data: dict):
     author_id = data.get("author_id")
     content = data.get("content")
 
@@ -42,10 +51,13 @@ def create_comment(post_id: int, data: dict):
         "datetime": datetime.now().isoformat()
     }
     comments.append(new_comment)
+    result = update_comments_count(post_id, True)
+    if result == 0:
+        raise HTTPException(status_code=404, detail="post_not_found")
     return {"status_code": 201, "data": new_comment}
 
 @router.patch("/{comment_id}/update")
-def update_comment(comment_id: int, data: dict):
+async def update_comment(comment_id: int, data: dict):
     comment = next((c for c in comments if c["id"] == comment_id), None)
     if not comment:
         raise HTTPException(status_code=404, detail="comment_not_found")
@@ -58,12 +70,15 @@ def update_comment(comment_id: int, data: dict):
     return {"status_code": 200, "data": comment}
 
 @router.delete("/{comment_id}/delete", status_code=204)
-def delete_comment(comment_id: int):
-    comment_item = next((c for c in comments if c["id"] == id), None)
+async def delete_comment(comment_id: int):
+    comment_item = next((c for c in comments if c["id"] == comment_id), None)
     if not comment_item:
         raise HTTPException(status_code=404, detail="comment_not_found")
     
     comments.remove(comment_item)
+    result = update_comments_count(comment_item["post_id"], False)
+    if result == 0:
+        raise HTTPException(status_code=404, detail="post_not_found")
     return {"status_code": 204, "data": "comment_deleted_successfully"}
 
 # update post comments count when comment is created or deleted

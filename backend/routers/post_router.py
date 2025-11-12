@@ -1,21 +1,35 @@
 # routers/user_router.py
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
+from pydantic import BaseModel
+from typing import List, Optional
+from comment_router import Comment
 
 router = APIRouter(prefix="/posts")
+
+class Post(BaseModel):
+    id : int
+    title: str
+    author_id : int
+    content : str
+    datetime : datetime
+    image : str
+    likes : int
+    comments : int
+    views : int
 
 post = [
     {"id": 1, "title": "Sample Post", "content": "This is a sample post.", "author_id": 1, "datetime": "2024-01-01T12:00:00", "image": "imageurl.com","likes": 10, "comments": 2, "views": 100},
 ]
 
 @router.get("/{post_id}")
-def get_post(post_id: int):
+async def get_post(post_id: int):
     if post_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_post_id")
     return {"status_code": 200, "data": post}
 
 @router.post("/create", status_code=201)
-def create_post(data: dict):
+async def create_post(data: dict):
     title = data.get("title")
     content = data.get("content")
     author_id = data.get("author_id")
@@ -48,11 +62,12 @@ def create_post(data: dict):
         "comments": 0,
         "views": 0
     }
+
     post.append(new_post)
     return {"status_code": 201, "data": new_post}
 
 @router.post("/{post_id}/update")
-def update_post(post_id: int, data: dict):
+async def update_post(post_id: int, data: dict):
     post_item = next((p for p in post if p["id"] == post_id), None)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
@@ -77,7 +92,7 @@ def update_post(post_id: int, data: dict):
     return {"status_code": 200, "data": post_item}
 
 @router.delete("/{post_id}/delete", status_code=204)
-def delete_post(post_id: int):
+async def delete_post(post_id: int):
     post_item = next((p for p in post if p["id"] == post_id), None)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
@@ -86,3 +101,35 @@ def delete_post(post_id: int):
     return {"status_code": 204, "data": "post_deleted_successfully"}
 
 # update post comments count when comment is created or deleted
+def update_comments_count(post_id: int, isComment: bool):
+    post_item = next((p for p in post if p["id"] == post_id), None)
+    if not post_item:
+        return 0
+    if isComment:
+        post_item["comments"] += 1
+    elif isComment:
+        post_item["comments"] -= 1
+    return "Comment count Updated."
+
+@router.patch("/{post_id}/likes")
+async def update_likes_count(post_id: int, islike: bool):
+    post_item = next((p for p in post if p["id"] == post_id), None)
+    
+    if not post_item:
+        raise HTTPException(status_code=404, detail="post_not_found")
+    if islike:
+        post_item['likes'] += 1
+    elif not islike:
+        post_item['likes'] -= 1
+    
+    return {"status_code": 204, "data": "post_likes_upated_successfully."}
+
+@router.patch("/{post_id}/views")
+async def update_views_count(post_id: int):
+    post_item = next((p for p in post if p["id"] == post_id), None)
+    
+    if not post_item:
+        raise HTTPException(status_code=404, detail="post_not_found")
+    post_item['views'] += 1
+    
+    return {"status_code": 204, "data": "post_views_upated_successfully."}

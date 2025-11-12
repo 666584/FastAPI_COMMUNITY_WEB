@@ -1,15 +1,28 @@
 # routers/user_router.py
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, EmailStr, Field
+
+import bcrypt
+import asyncio
 
 router = APIRouter(prefix="/users")
 
+saltRounds = 10  # bcrypt 솔트 라운드
+
+class User(BaseModel):
+    id : int
+    username : str = Field(unique=True, index=True, max_length=10)
+    email : EmailStr = Field(unique=True, index=True, max_length=255)
+    password : str = Field(unique=True, index=True, min_length=8, max_length=20)
+    profile : str = Field(max_length=500)
+
 users = [
-    {"id": 1, "username": "alice", "email": "alice@test.com"},
-    {"id": 2, "username": "bob", "email": "bob@test.com"},
+    {"id": 1, "username": "alice", "email": "alice@test.com", "password": "Test1#", "profile": "www.test_image.com"},
+    {"id": 2, "username": "bob", "email": "bob@test.com", "password": "Test2#", "profile": "www.test_image.com"},
 ]
 
 @router.get("/{user_id}")
-def get_user(user_id: int):
+async def get_user(user_id: int):
     if user_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_user_id")
     user = next((u for u in users if u["id"] == user_id), None)
@@ -18,7 +31,7 @@ def get_user(user_id: int):
     return {"status_code": 200, "data": user}
 
 @router.post("/register", status_code=201)
-def create_user(data: dict):
+async def create_user(data: dict):
     username = data.get("username")
     email = data.get("email")
     password1 = data.get("password1")
@@ -26,12 +39,14 @@ def create_user(data: dict):
     profile = data.get("profile")
 
     # Profile validation
+    
     if not profile:
         raise HTTPException(status_code=400, detail="missing_profile")
     if profile and len(profile) > 500:
         raise HTTPException(status_code=400, detail="profile_too_long")
     
     # Username validation
+    
     if not username:
         raise HTTPException(status_code=400, detail="missing_username")
     if any(u["username"] == username for u in users):
@@ -42,7 +57,7 @@ def create_user(data: dict):
         raise HTTPException(status_code=400, detail="username_too_long")
     if username.lower() in {"admin", "root", "system"}:
         raise HTTPException(status_code=400, detail="username_reserved")
-
+    
     # Password complexity checks
     if not password1:
         raise HTTPException(status_code=400, detail="missing_password")
@@ -50,6 +65,7 @@ def create_user(data: dict):
         raise HTTPException(status_code=400, detail="missing_password_confirmation")
     if password1 != password2:
         raise HTTPException(status_code=400, detail="passwords_do_not_match")    
+    
     if len(password1) < 8:
         raise HTTPException(status_code=400, detail="password_too_short")
     if len(password1) > 20:
@@ -66,6 +82,7 @@ def create_user(data: dict):
         raise HTTPException(status_code=400, detail="password_missing_special_character")
     
     # Email validation
+    
     if "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(status_code=400, detail="invalid_email_format")
     if len(email) > 254:
@@ -87,13 +104,17 @@ def create_user(data: dict):
         raise HTTPException(status_code=400, detail="email_invalid_characters")
     if not all(ord(c) < 128 for c in email):
         raise HTTPException(status_code=400, detail="email_non_ascii_characters") 
- 
-    new_user = {"id": len(users) + 1, "username": username, "email": email, "password": password1, "profile": profile}
+    
+    # 비밀번호 암호화
+    salt = bcrypt.gensalt(rounds=saltRounds)
+    hashedPassword = bcrypt.hashpw(password1.encode("utf-8"), salt).decode("utf-8")
+    
+    new_user = {"id": len(users) + 1, "username": username, "email": email, "password": hashedPassword, "profile": profile}
     users.append(new_user)
     return {"status_code": 201, "data": new_user}
 
 @router.post("/login")
-def login(data: dict):
+async def login(data: dict):
     email = data.get("email")
     password = data.get("password")
 
@@ -111,13 +132,16 @@ def login(data: dict):
         raise HTTPException(status_code=401, detail="unauthorized")
     if not password:
         raise HTTPException(status_code=400, detail="missing_password")
-    if password != user["password"]:
-        raise HTTPException(status_code=401, detail="unauthorized")
+    
+    match = bcrypt.checkpw(password.encode("utf-8"), user["password"].encode("utf-8"))
+    
+    if not match:
+        raise HTTPException(status_code=401, detail="password does not match")
 
     return {"status_code": 200, "data": {"user_id": user["id"], "username": user["username"]}}
 
 @router.patch("/change_password")
-def change_password(data: dict): 
+async def change_password(data: dict): 
     user_id = data.get("user_id")
     password1 = data.get("password1")
     password2 = data.get("password2")
@@ -151,7 +175,7 @@ def change_password(data: dict):
     return {"status_code": 200, "data": "password_changed_successfully"}
 
 @router.put("/update_profile")
-def update_profile(data: dict):
+async def update_profile(data: dict):
     user_id = data.get("user_id")
     profile = data.get("profile")
     user = next((u for u in users if u["id"] == user_id), None)
@@ -167,7 +191,7 @@ def update_profile(data: dict):
     return {"status_code": 200, "data": "profile_updated_successfully"}
 
 @router.patch("/update_username")
-def update_username(data: dict):
+async def update_username(data: dict):
     user_id = data.get("user_id")
     new_username = data.get("new_username")
     user = next((u for u in users if u["id"] == user_id), None)
@@ -190,7 +214,7 @@ def update_username(data: dict):
     return {"status_code": 200, "data": "username_updated_successfully"}
 
 @router.delete("/delete/{user_id}")
-def delete_user(user_id: int):
+async def delete_user(user_id: int):
     user = next((u for u in users if u["id"] == user_id), None)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")
