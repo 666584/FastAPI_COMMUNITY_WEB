@@ -19,12 +19,12 @@ post = [
     {"id": 1, "title": "Sample Post", "content": "This is a sample post.", "author_id": 1, "datetime": "2024-01-01T12:00:00", "image": "imageurl.com","likes": 10, "comments": 2, "views": 100},
 ]
 
-def get_post(post_id: int):
+async def get_post(post_id: int):
     if post_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_post_id")
     return {"status_code": 200, "data": post}
 
-def create_post(data: dict):
+async def create_post(data: dict):
     title = data.get("title")
     content = data.get("content")
     author_id = data.get("author_id")
@@ -61,7 +61,7 @@ def create_post(data: dict):
     post.append(new_post)
     return {"status_code": 201, "data": new_post}
 
-def update_post(post_id: int, data: dict):
+async def update_post(post_id: int, data: dict):
     post_item = next((p for p in post if p["id"] == post_id), None)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
@@ -85,7 +85,7 @@ def update_post(post_id: int, data: dict):
 
     return {"status_code": 200, "data": post_item}
 
-def delete_post(post_id: int):
+async def delete_post(post_id: int):
     post_item = next((p for p in post if p["id"] == post_id), None)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
@@ -104,7 +104,7 @@ def update_comments_count(post_id: int, isComment: bool):
         post_item["comments"] -= 1
     return "Comment count Updated."
 
-def update_likes_count(post_id: int, islike: bool):
+async def update_likes_count(post_id: int, islike: bool):
     post_item = next((p for p in post if p["id"] == post_id), None)
     
     if not post_item:
@@ -116,7 +116,7 @@ def update_likes_count(post_id: int, islike: bool):
     
     return {"status_code": 204, "data": "post_likes_upated_successfully."}
 
-def update_views_count(post_id: int):
+async def update_views_count(post_id: int):
     post_item = next((p for p in post if p["id"] == post_id), None)
     
     if not post_item:

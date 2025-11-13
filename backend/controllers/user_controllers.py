@@ -18,7 +18,7 @@ users = [
     {"id": 2, "username": "bob", "email": "bob@test.com", "password": "Test2#", "profile": "www.test_image.com"},
 ]
 
-def get_user(user_id: int):
+async def get_user(user_id: int):
     if user_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_user_id")
     user = next((u for u in users if u["id"] == user_id), None)
@@ -26,7 +26,7 @@ def get_user(user_id: int):
         raise HTTPException(status_code=404, detail="user_not_found")
     return user
 
-def create_user(data: dict):
+async def create_user(data: dict):
     username = data.get("username")
     email = data.get("email")
     password1 = data.get("password1")
@@ -108,7 +108,7 @@ def create_user(data: dict):
     users.append(new_user)
     return new_user
 
-def login(data: dict):
+async def login(data: dict):
     email = data.get("email")
     password = data.get("password")
 
@@ -134,7 +134,7 @@ def login(data: dict):
 
     return {"user_id": user["id"], "username": user["username"]}
 
-def change_password(data: dict): 
+async def change_password(data: dict): 
     user_id = data.get("user_id")
     password1 = data.get("password1")
     password2 = data.get("password2")
@@ -167,7 +167,7 @@ def change_password(data: dict):
     user["password"] = password1
     return "password_changed_successfully"
 
-def update_profile(data: dict):
+async def update_profile(data: dict):
     user_id = data.get("user_id")
     profile = data.get("profile")
     user = next((u for u in users if u["id"] == user_id), None)
@@ -182,7 +182,7 @@ def update_profile(data: dict):
     user["profile"] = profile
     return "profile_updated_successfully"
 
-def update_username(data: dict):
+async def update_username(data: dict):
     user_id = data.get("user_id")
     new_username = data.get("new_username")
     user = next((u for u in users if u["id"] == user_id), None)
@@ -204,7 +204,7 @@ def update_username(data: dict):
     user["username"] = new_username
     return "username_updated_successfully"
 
-def delete_user(user_id: int):
+async def delete_user(user_id: int):
     user = next((u for u in users if u["id"] == user_id), None)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")
