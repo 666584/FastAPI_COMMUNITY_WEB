@@ -31,7 +31,7 @@ def create_user(data: dict):
     
     if not username:
         raise HTTPException(status_code=400, detail="missing_username")
-    if any(u["username"] == username for u in model.add_userget_users()):
+    if any(u["username"] == username for u in model.get_users()):
         raise HTTPException(status_code=403, detail="username_already_exists")
     if " " in username:
         raise HTTPException(status_code=400, detail="username_contains_space")
