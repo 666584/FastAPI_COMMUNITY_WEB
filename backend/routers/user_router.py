@@ -1,222 +1,33 @@
 # routers/user_router.py
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr, Field
-
-import bcrypt
-import asyncio
+from fastapi import APIRouter
+from controllers import user_controllers as controller
 
 router = APIRouter(prefix="/users")
 
-saltRounds = 10  # bcrypt 솔트 라운드
-
-class User(BaseModel):
-    id : int
-    username : str = Field(unique=True, index=True, max_length=10)
-    email : EmailStr = Field(unique=True, index=True, max_length=255)
-    password : str = Field(unique=True, index=True, min_length=8, max_length=20)
-    profile : str = Field(max_length=500)
-
-users = [
-    {"id": 1, "username": "alice", "email": "alice@test.com", "password": "Test1#", "profile": "www.test_image.com"},
-    {"id": 2, "username": "bob", "email": "bob@test.com", "password": "Test2#", "profile": "www.test_image.com"},
-]
-
 @router.get("/{user_id}")
 async def get_user(user_id: int):
-    if user_id <= 0:
-        raise HTTPException(status_code=400, detail="invalid_user_id")
-    user = next((u for u in users if u["id"] == user_id), None)
-    if not user:
-        raise HTTPException(status_code=404, detail="user_not_found")
-    return {"status_code": 200, "data": user}
+    return controller.get_user(user_id)
 
 @router.post("/register", status_code=201)
 async def create_user(data: dict):
-    username = data.get("username")
-    email = data.get("email")
-    password1 = data.get("password1")
-    password2 = data.get("password2")
-    profile = data.get("profile")
-
-    # Profile validation
-    
-    if not profile:
-        raise HTTPException(status_code=400, detail="missing_profile")
-    if profile and len(profile) > 500:
-        raise HTTPException(status_code=400, detail="profile_too_long")
-    
-    # Username validation
-    
-    if not username:
-        raise HTTPException(status_code=400, detail="missing_username")
-    if any(u["username"] == username for u in users):
-        raise HTTPException(status_code=403, detail="username_already_exists")
-    if " " in username:
-        raise HTTPException(status_code=400, detail="username_contains_space")
-    if len(username) > 10:
-        raise HTTPException(status_code=400, detail="username_too_long")
-    if username.lower() in {"admin", "root", "system"}:
-        raise HTTPException(status_code=400, detail="username_reserved")
-    
-    # Password complexity checks
-    if not password1:
-        raise HTTPException(status_code=400, detail="missing_password")
-    if not password2:
-        raise HTTPException(status_code=400, detail="missing_password_confirmation")
-    if password1 != password2:
-        raise HTTPException(status_code=400, detail="passwords_do_not_match")    
-    
-    if len(password1) < 8:
-        raise HTTPException(status_code=400, detail="password_too_short")
-    if len(password1) > 20:
-        raise HTTPException(status_code=400, detail="password_too_long")
-    if " " in password1:
-        raise HTTPException(status_code=400, detail="password_contains_space")
-    if not any(c.islower() for c in password1):
-        raise HTTPException(status_code=400, detail="password_missing_lowercase")
-    if not any(c.isupper() for c in password1):
-        raise HTTPException(status_code=400, detail="password_missing_uppercase")
-    if not any(c.isdigit() for c in password1):
-        raise HTTPException(status_code=400, detail="password_missing_digit")
-    if not any(c in "!@#$%^&*()-_=+[]{}|;:'\",.<>?/`~" for c in password1):
-        raise HTTPException(status_code=400, detail="password_missing_special_character")
-    
-    # Email validation
-    
-    if "@" not in email or "." not in email.split("@")[-1]:
-        raise HTTPException(status_code=400, detail="invalid_email_format")
-    if len(email) > 254:
-        raise HTTPException(status_code=400, detail="email_too_long")
-    if any(u["email"] == email for u in users):
-        raise HTTPException(status_code=403, detail="email_already_exists")
-    if email.startswith(".") or email.endswith("."):
-        raise HTTPException(status_code=400, detail="email_invalid_format")
-    if " " in email:
-        raise HTTPException(status_code=400, detail="email_contains_space")
-    if ".." in email:   
-        raise HTTPException(status_code=400, detail="email_invalid_format")
-    if email.count("@") != 1:
-        raise HTTPException(status_code=400, detail="email_invalid_format")
-    domain_part = email.split("@")[1]
-    if domain_part.startswith("-") or domain_part.endswith("-"):
-        raise HTTPException(status_code=400, detail="email_invalid_format")
-    if any(c in "(),:;<>[]\\ " for c in email):
-        raise HTTPException(status_code=400, detail="email_invalid_characters")
-    if not all(ord(c) < 128 for c in email):
-        raise HTTPException(status_code=400, detail="email_non_ascii_characters") 
-    
-    # 비밀번호 암호화
-    salt = bcrypt.gensalt(rounds=saltRounds)
-    hashedPassword = bcrypt.hashpw(password1.encode("utf-8"), salt).decode("utf-8")
-    
-    new_user = {"id": len(users) + 1, "username": username, "email": email, "password": hashedPassword, "profile": profile}
-    users.append(new_user)
-    return {"status_code": 201, "data": new_user}
+    return controller.create_user(data)
 
 @router.post("/login")
 async def login(data: dict):
-    email = data.get("email")
-    password = data.get("password")
-
-    if not email:
-        raise HTTPException(status_code=400, detail="missing_email")
-    if not isinstance(email, str) or "@" not in email:
-        raise HTTPException(status_code=400, detail="invalid_email_format")
-    if len(email) > 254:
-        raise HTTPException(status_code=400, detail="email_too_long")
-    if len(email) < 5:
-        raise HTTPException(status_code=400, detail="email_too_short")
-    
-    user = next((u for u in users if u["email"] == email), None)
-    if not user:
-        raise HTTPException(status_code=401, detail="unauthorized")
-    if not password:
-        raise HTTPException(status_code=400, detail="missing_password")
-    
-    match = bcrypt.checkpw(password.encode("utf-8"), user["password"].encode("utf-8"))
-    
-    if not match:
-        raise HTTPException(status_code=401, detail="password does not match")
-
-    return {"status_code": 200, "data": {"user_id": user["id"], "username": user["username"]}}
+    return controller.login(data)
 
 @router.patch("/change_password")
 async def change_password(data: dict): 
-    user_id = data.get("user_id")
-    password1 = data.get("password1")
-    password2 = data.get("password2")
-    user = next((u for u in users if u["id"] == user_id), None)
-    if not user:
-        raise HTTPException(status_code=404, detail="user_not_found")   
-    
-    # Password complexity checks
-    if not password1:
-        raise HTTPException(status_code=400, detail="missing_password")
-    if not password2:
-        raise HTTPException(status_code=400, detail="missing_password_confirmation")
-    if password1 != password2:
-        raise HTTPException(status_code=400, detail="passwords_do_not_match")    
-    if len(password1) < 8:
-        raise HTTPException(status_code=400, detail="password_too_short")
-    if len(password1) > 20:
-        raise HTTPException(status_code=400, detail="password_too_long")
-    if " " in password1:
-        raise HTTPException(status_code=400, detail="password_contains_space")
-    if not any(c.islower() for c in password1):
-        raise HTTPException(status_code=400, detail="password_missing_lowercase")
-    if not any(c.isupper() for c in password1):
-        raise HTTPException(status_code=400, detail="password_missing_uppercase")
-    if not any(c.isdigit() for c in password1):
-        raise HTTPException(status_code=400, detail="password_missing_digit")
-    if not any(c in "!@#$%^&*()-_=+[]{}|;:'\",.<>?/`~" for c in password1):
-        raise HTTPException(status_code=400, detail="password_missing_special_character")
-    
-    user["password"] = password1
-    return {"status_code": 200, "data": "password_changed_successfully"}
+    return change_password(data)
 
 @router.put("/update_profile")
 async def update_profile(data: dict):
-    user_id = data.get("user_id")
-    profile = data.get("profile")
-    user = next((u for u in users if u["id"] == user_id), None)
-    if not user:
-        raise HTTPException(status_code=404, detail="user_not_found")   
-    
-    if not profile:
-        raise HTTPException(status_code=400, detail="missing_profile")
-    if len(profile) > 500:
-        raise HTTPException(status_code=400, detail="profile_too_long")
-    
-    user["profile"] = profile
-    return {"status_code": 200, "data": "profile_updated_successfully"}
+    return update_profile(data)
 
 @router.patch("/update_username")
 async def update_username(data: dict):
-    user_id = data.get("user_id")
-    new_username = data.get("new_username")
-    user = next((u for u in users if u["id"] == user_id), None)
-    if not user:
-        raise HTTPException(status_code=404, detail="user_not_found")   
-    
-    # Username validation
-    if not new_username:
-        raise HTTPException(status_code=400, detail="missing_username")
-    if any(u["username"] == new_username for u in users):
-        raise HTTPException(status_code=403, detail="username_already_exists")
-    if " " in new_username:
-        raise HTTPException(status_code=400, detail="username_contains_space")
-    if len(new_username) > 10:
-        raise HTTPException(status_code=400, detail="username_too_long")
-    if new_username.lower() in {"admin", "root", "system"}:
-        raise HTTPException(status_code=400, detail="username_reserved")
-    
-    user["username"] = new_username
-    return {"status_code": 200, "data": "username_updated_successfully"}
+    return update_username(data)
 
 @router.delete("/delete/{user_id}")
 async def delete_user(user_id: int):
-    user = next((u for u in users if u["id"] == user_id), None)
-    if not user:
-        raise HTTPException(status_code=404, detail="user_not_found")
-    users.remove(user)
-    return {"status_code": 200, "data": "user_deleted_successfully"}
+    return delete_user(user_id)
