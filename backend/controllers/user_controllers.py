@@ -1,22 +1,9 @@
 # controllers/user_controller.py
 from fastapi import HTTPException
-from pydantic import BaseModel, EmailStr, Field
-
 import bcrypt
+from models.user_model import User, users
 
 saltRounds = 10
-
-class User(BaseModel):
-    id : int
-    username : str = Field(unique=True, index=True, max_length=10)
-    email : EmailStr = Field(unique=True, index=True, max_length=255)
-    password : str = Field(unique=True, index=True, min_length=8, max_length=20)
-    profile : str = Field(max_length=500)
-
-users = [
-    {"id": 1, "username": "alice", "email": "alice@test.com", "password": "Test1#", "profile": "www.test_image.com"},
-    {"id": 2, "username": "bob", "email": "bob@test.com", "password": "Test2#", "profile": "www.test_image.com"},
-]
 
 async def get_user(user_id: int):
     if user_id <= 0:
@@ -164,7 +151,10 @@ async def change_password(data: dict):
     if not any(c in "!@#$%^&*()-_=+[]{}|;:'\",.<>?/`~" for c in password1):
         raise HTTPException(status_code=400, detail="password_missing_special_character")
     
-    user["password"] = password1
+    salt = bcrypt.gensalt(rounds=saltRounds)
+    hashedPassword = bcrypt.hashpw(password1.encode("utf-8"), salt).decode("utf-8")
+    user["password"] = hashedPassword
+    
     return "password_changed_successfully"
 
 async def update_profile(data: dict):

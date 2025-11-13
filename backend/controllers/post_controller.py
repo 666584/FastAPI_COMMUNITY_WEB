@@ -1,27 +1,12 @@
 # controllers/post_controller.py
 from fastapi import HTTPException
 from datetime import datetime
-from pydantic import BaseModel
-
-class Post(BaseModel):
-    id : int
-    title: str
-    author_id : int
-    content : str
-    datetime : datetime
-    image : str
-    likes : int
-    comments : int
-    views : int
-
-post = [
-    {"id": 1, "title": "Sample Post", "content": "This is a sample post.", "author_id": 1, "datetime": "2024-01-01T12:00:00", "image": "imageurl.com","likes": 10, "comments": 2, "views": 100},
-]
+from models.post_model import Post, posts
 
 async def get_post(post_id: int):
     if post_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_post_id")
-    return {"status_code": 200, "data": post}
+    return {"status_code": 200, "data": posts}
 
 async def create_post(data: dict):
     title = data.get("title")
@@ -46,7 +31,7 @@ async def create_post(data: dict):
         raise HTTPException(status_code=400, detail="image_url_too_long")
     
     new_post = {
-        "id": len(post) + 1,
+        "id": len(posts) + 1,
         "title": title,
         "content": content,
         "author_id": author_id,
@@ -57,11 +42,11 @@ async def create_post(data: dict):
         "views": 0
     }
 
-    post.append(new_post)
+    posts.append(new_post)
     return {"status_code": 201, "data": new_post}
 
 async def update_post(post_id: int, data: dict):
-    post_item = next((p for p in post if p["id"] == post_id), None)
+    post_item = next((p for p in posts if p["id"] == post_id), None)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
     
@@ -85,16 +70,16 @@ async def update_post(post_id: int, data: dict):
     return {"status_code": 200, "data": post_item}
 
 async def delete_post(post_id: int):
-    post_item = next((p for p in post if p["id"] == post_id), None)
+    post_item = next((p for p in posts if p["id"] == post_id), None)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
     
-    post.remove(post_item)
+    posts.remove(post_item)
     return {"status_code": 204, "data": "post_deleted_successfully"}
 
 # update post comments count when comment is created or deleted
 def update_comments_count(post_id: int, isComment: bool):
-    post_item = next((p for p in post if p["id"] == post_id), None)
+    post_item = next((p for p in posts if p["id"] == post_id), None)
     if not post_item:
         return 0
     if isComment:
@@ -104,7 +89,7 @@ def update_comments_count(post_id: int, isComment: bool):
     return "Comment count Updated."
 
 async def update_likes_count(post_id: int, islike: bool):
-    post_item = next((p for p in post if p["id"] == post_id), None)
+    post_item = next((p for p in posts if p["id"] == post_id), None)
     
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
@@ -116,7 +101,7 @@ async def update_likes_count(post_id: int, islike: bool):
     return {"status_code": 204, "data": "post_likes_upated_successfully."}
 
 async def update_views_count(post_id: int):
-    post_item = next((p for p in post if p["id"] == post_id), None)
+    post_item = next((p for p in posts if p["id"] == post_id), None)
     
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")

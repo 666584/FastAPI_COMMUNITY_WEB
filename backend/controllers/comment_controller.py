@@ -1,19 +1,8 @@
 # controllers/comment_controller.py
 from fastapi import HTTPException
 from datetime import datetime
-from pydantic import BaseModel
 from controllers.post_controller import update_comments_count
-
-class Comment(BaseModel):
-    id : int
-    post_id : int
-    author_id : int 
-    content : str
-    datetime : datetime
-
-comments = [
-    {"id": 1, "post_id": 1, "author_id": 2, "content": "Great post!", "datetime": "2024-01-02T14:00:00"},
-]
+from models.comment_model import Comment, comments
 
 async def get_comments(comment_id: int):
     if comment_id <= 0:
