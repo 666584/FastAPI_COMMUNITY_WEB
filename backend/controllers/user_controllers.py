@@ -1,19 +1,19 @@
 # controllers/user_controller.py
 from fastapi import HTTPException
 import bcrypt
-from models.user_model import User, users
+from models.user_model import User, get_users, get_user_by_email, get_user_by_id, delete_user, add_user, get_user_by_username
 
 saltRounds = 10
 
-async def get_user(user_id: int):
+def get_user(user_id: int):
     if user_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_user_id")
-    user = next((u for u in users if u["id"] == user_id), None)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")
     return user
 
-async def create_user(data: dict):
+def create_user(data: dict):
     username = data.get("username")
     email = data.get("email")
     password1 = data.get("password1")
@@ -31,7 +31,7 @@ async def create_user(data: dict):
     
     if not username:
         raise HTTPException(status_code=400, detail="missing_username")
-    if any(u["username"] == username for u in users):
+    if any(u["username"] == username for u in get_users()):
         raise HTTPException(status_code=403, detail="username_already_exists")
     if " " in username:
         raise HTTPException(status_code=400, detail="username_contains_space")
@@ -69,7 +69,7 @@ async def create_user(data: dict):
         raise HTTPException(status_code=400, detail="invalid_email_format")
     if len(email) > 254:
         raise HTTPException(status_code=400, detail="email_too_long")
-    if any(u["email"] == email for u in users):
+    if any(u["email"] == email for u in get_users()):
         raise HTTPException(status_code=403, detail="email_already_exists")
     if email.startswith(".") or email.endswith("."):
         raise HTTPException(status_code=400, detail="email_invalid_format")
@@ -91,11 +91,11 @@ async def create_user(data: dict):
     salt = bcrypt.gensalt(rounds=saltRounds)
     hashedPassword = bcrypt.hashpw(password1.encode("utf-8"), salt).decode("utf-8")
     
-    new_user = {"id": len(users) + 1, "username": username, "email": email, "password": hashedPassword, "profile": profile}
-    users.append(new_user)
+    new_user = {"id": len(get_users()) + 1, "username": username, "email": email, "password": hashedPassword, "profile": profile}
+    add_user(new_user)
     return new_user
 
-async def login(data: dict):
+def login(data: dict):
     email = data.get("email")
     password = data.get("password")
 
@@ -108,7 +108,7 @@ async def login(data: dict):
     if len(email) < 5:
         raise HTTPException(status_code=400, detail="email_too_short")
     
-    user = next((u for u in users if u["email"] == email), None)
+    user = get_user_by_email(email)
     if not user:
         raise HTTPException(status_code=401, detail="unauthorized")
     if not password:
@@ -121,11 +121,11 @@ async def login(data: dict):
 
     return {"user_id": user["id"], "username": user["username"]}
 
-async def change_password(data: dict): 
+def change_password(data: dict): 
     user_id = data.get("user_id")
     password1 = data.get("password1")
     password2 = data.get("password2")
-    user = next((u for u in users if u["id"] == user_id), None)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")   
     
@@ -154,13 +154,13 @@ async def change_password(data: dict):
     salt = bcrypt.gensalt(rounds=saltRounds)
     hashedPassword = bcrypt.hashpw(password1.encode("utf-8"), salt).decode("utf-8")
     user["password"] = hashedPassword
-    
+
     return "password_changed_successfully"
 
-async def update_profile(data: dict):
+def update_profile(data: dict):
     user_id = data.get("user_id")
     profile = data.get("profile")
-    user = next((u for u in users if u["id"] == user_id), None)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")   
     
@@ -172,17 +172,17 @@ async def update_profile(data: dict):
     user["profile"] = profile
     return "profile_updated_successfully"
 
-async def update_username(data: dict):
+def update_username(data: dict):
     user_id = data.get("user_id")
     new_username = data.get("new_username")
-    user = next((u for u in users if u["id"] == user_id), None)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")   
     
     # Username validation
     if not new_username:
         raise HTTPException(status_code=400, detail="missing_username")
-    if any(u["username"] == new_username for u in users):
+    if any(u["username"] == new_username for u in get_users()):
         raise HTTPException(status_code=403, detail="username_already_exists")
     if " " in new_username:
         raise HTTPException(status_code=400, detail="username_contains_space")
@@ -194,9 +194,9 @@ async def update_username(data: dict):
     user["username"] = new_username
     return "username_updated_successfully"
 
-async def delete_user(user_id: int):
-    user = next((u for u in users if u["id"] == user_id), None)
+def delete_user(user_id: int):
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")
-    users.remove(user)
+    delete_user(user)
     return "user_deleted_successfully"

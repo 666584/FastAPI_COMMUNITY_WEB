@@ -1,14 +1,14 @@
 # controllers/post_controller.py
 from fastapi import HTTPException
 from datetime import datetime
-from models.post_model import Post, posts
+from models.post_model import Post, get_post_by_id, get_posts, delete_post, add_post
 
-async def get_post(post_id: int):
+def get_post(post_id: int):
     if post_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_post_id")
-    return {"status_code": 200, "data": posts}
+    return {"status_code": 200, "data": get_posts()}
 
-async def create_post(data: dict):
+def create_post(data: dict):
     title = data.get("title")
     content = data.get("content")
     author_id = data.get("author_id")
@@ -31,7 +31,7 @@ async def create_post(data: dict):
         raise HTTPException(status_code=400, detail="image_url_too_long")
     
     new_post = {
-        "id": len(posts) + 1,
+        "id": len(get_posts()) + 1,
         "title": title,
         "content": content,
         "author_id": author_id,
@@ -42,11 +42,11 @@ async def create_post(data: dict):
         "views": 0
     }
 
-    posts.append(new_post)
+    add_post(new_post)
     return {"status_code": 201, "data": new_post}
 
-async def update_post(post_id: int, data: dict):
-    post_item = next((p for p in posts if p["id"] == post_id), None)
+def update_post(post_id: int, data: dict):
+    post_item = get_post_by_id(post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
     
@@ -69,17 +69,17 @@ async def update_post(post_id: int, data: dict):
 
     return {"status_code": 200, "data": post_item}
 
-async def delete_post(post_id: int):
-    post_item = next((p for p in posts if p["id"] == post_id), None)
+def delete_post(post_id: int):
+    post_item = get_post_by_id(post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
     
-    posts.remove(post_item)
+    delete_post(post_item)
     return {"status_code": 204, "data": "post_deleted_successfully"}
 
 # update post comments count when comment is created or deleted
 def update_comments_count(post_id: int, isComment: bool):
-    post_item = next((p for p in posts if p["id"] == post_id), None)
+    post_item = get_post_by_id(post_id)
     if not post_item:
         return 0
     if isComment:
@@ -88,8 +88,8 @@ def update_comments_count(post_id: int, isComment: bool):
         post_item["comments"] -= 1
     return "Comment count Updated."
 
-async def update_likes_count(post_id: int, islike: bool):
-    post_item = next((p for p in posts if p["id"] == post_id), None)
+def update_likes_count(post_id: int, islike: bool):
+    post_item = get_post_by_id(post_id)
     
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
@@ -100,8 +100,8 @@ async def update_likes_count(post_id: int, islike: bool):
     
     return {"status_code": 204, "data": "post_likes_upated_successfully."}
 
-async def update_views_count(post_id: int):
-    post_item = next((p for p in posts if p["id"] == post_id), None)
+def update_views_count(post_id: int):
+    post_item = get_post_by_id(post_id)
     
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
