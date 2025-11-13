@@ -1,6 +1,6 @@
 # routers/comment_router.py
 from fastapi import APIRouter
-from controllers import post_controller as controller
+from controllers import comment_controller as controller
 
 router = APIRouter(prefix="/comments")
 

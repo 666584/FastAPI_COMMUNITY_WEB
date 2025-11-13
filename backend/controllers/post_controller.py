@@ -2,7 +2,6 @@
 from fastapi import HTTPException
 from datetime import datetime
 from pydantic import BaseModel
-from comment_controller import Comment
 
 class Post(BaseModel):
     id : int
