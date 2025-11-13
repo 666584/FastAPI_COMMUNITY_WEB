@@ -1,12 +1,12 @@
 # controllers/post_controller.py
 from fastapi import HTTPException
 from datetime import datetime
-from models.post_model import Post, get_post_by_id, get_posts, delete_post, add_post
+import models.post_model as model
 
 def get_post(post_id: int):
     if post_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_post_id")
-    return {"status_code": 200, "data": get_posts()}
+    return {"status_code": 200, "data": model.get_posts()}
 
 def create_post(data: dict):
     title = data.get("title")
@@ -31,7 +31,7 @@ def create_post(data: dict):
         raise HTTPException(status_code=400, detail="image_url_too_long")
     
     new_post = {
-        "id": len(get_posts()) + 1,
+        "id": len(model.get_posts()) + 1,
         "title": title,
         "content": content,
         "author_id": author_id,
@@ -42,11 +42,11 @@ def create_post(data: dict):
         "views": 0
     }
 
-    add_post(new_post)
+    model.add_post(new_post)
     return {"status_code": 201, "data": new_post}
 
 def update_post(post_id: int, data: dict):
-    post_item = get_post_by_id(post_id)
+    post_item = model.get_post_by_id(post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
     
@@ -70,7 +70,7 @@ def update_post(post_id: int, data: dict):
     return {"status_code": 200, "data": post_item}
 
 def delete_post(post_id: int):
-    post_item = get_post_by_id(post_id)
+    post_item = model.get_post_by_id(post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
     
@@ -79,17 +79,17 @@ def delete_post(post_id: int):
 
 # update post comments count when comment is created or deleted
 def update_comments_count(post_id: int, isComment: bool):
-    post_item = get_post_by_id(post_id)
+    post_item = model.get_post_by_id(post_id)
     if not post_item:
         return 0
     if isComment:
         post_item["comments"] += 1
-    elif isComment:
+    elif not isComment:
         post_item["comments"] -= 1
     return "Comment count Updated."
 
 def update_likes_count(post_id: int, islike: bool):
-    post_item = get_post_by_id(post_id)
+    post_item = model.get_post_by_id(post_id)
     
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
@@ -98,13 +98,13 @@ def update_likes_count(post_id: int, islike: bool):
     elif not islike:
         post_item['likes'] -= 1
     
-    return {"status_code": 204, "data": "post_likes_upated_successfully."}
+    return {"status_code": 200, "data": "post_likes_upated_successfully."}
 
 def update_views_count(post_id: int):
-    post_item = get_post_by_id(post_id)
+    post_item = model.get_post_by_id(post_id)
     
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
     post_item['views'] += 1
     
-    return {"status_code": 204, "data": "post_views_upated_successfully."}
+    return {"status_code": 200, "data": "post_views_upated_successfully."}

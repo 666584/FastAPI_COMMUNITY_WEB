@@ -2,12 +2,12 @@
 from fastapi import HTTPException
 from datetime import datetime
 from controllers.post_controller import update_comments_count
-from models.comment_model import Comment, get_comments, get_comment_by_id, get_comments_by_post, add_comment, delete_comment
+import models.comment_model as model
 
 def get_comment(comment_id: int):
     if comment_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_comment_id")
-    comment = get_comment_by_id(comment_id)
+    comment = model.get_comment_by_id(comment_id)
     if not comment:
         raise HTTPException(status_code=404, detail="comment_not_found")
     return {"status_code": 200, "data": comment} 
@@ -29,20 +29,20 @@ def create_comment(post_id: int, data: dict):
         raise HTTPException(status_code=400, detail="missing_content")
 
     new_comment = {
-        "id": len(get_comments()) + 1,
+        "id": len(model.get_comments()) + 1,
         "post_id": post_id,
         "author_id": author_id,
         "content": content,
         "datetime": datetime.now().isoformat()
     }
-    add_comment(new_comment)
+    model.add_comment(new_comment)
     result = update_comments_count(post_id, True)
     if result == 0:
         raise HTTPException(status_code=404, detail="post_not_found")
     return {"status_code": 201, "data": new_comment}
 
 def update_comment(comment_id: int, data: dict):
-    comment = get_comment_by_id(comment_id)
+    comment = model.get_comment_by_id(comment_id)
     if not comment:
         raise HTTPException(status_code=404, detail="comment_not_found")
     
@@ -54,7 +54,7 @@ def update_comment(comment_id: int, data: dict):
     return {"status_code": 200, "data": comment}
 
 def delete_comment(comment_id: int):
-    comment_item = get_comment_by_id(comment_id)
+    comment_item = model.get_comment_by_id(comment_id)
     if not comment_item:
         raise HTTPException(status_code=404, detail="comment_not_found")
     

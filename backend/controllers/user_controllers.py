@@ -1,14 +1,14 @@
 # controllers/user_controller.py
 from fastapi import HTTPException
 import bcrypt
-from models.user_model import User, get_users, get_user_by_email, get_user_by_id, delete_user, add_user, get_user_by_username
+import models.user_model as model
 
 saltRounds = 10
 
 def get_user(user_id: int):
     if user_id <= 0:
         raise HTTPException(status_code=400, detail="invalid_user_id")
-    user = get_user_by_id(user_id)
+    user = model.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")
     return user
@@ -31,7 +31,7 @@ def create_user(data: dict):
     
     if not username:
         raise HTTPException(status_code=400, detail="missing_username")
-    if any(u["username"] == username for u in get_users()):
+    if any(u["username"] == username for u in model.add_userget_users()):
         raise HTTPException(status_code=403, detail="username_already_exists")
     if " " in username:
         raise HTTPException(status_code=400, detail="username_contains_space")
@@ -69,7 +69,7 @@ def create_user(data: dict):
         raise HTTPException(status_code=400, detail="invalid_email_format")
     if len(email) > 254:
         raise HTTPException(status_code=400, detail="email_too_long")
-    if any(u["email"] == email for u in get_users()):
+    if any(u["email"] == email for u in model.get_users()):
         raise HTTPException(status_code=403, detail="email_already_exists")
     if email.startswith(".") or email.endswith("."):
         raise HTTPException(status_code=400, detail="email_invalid_format")
@@ -91,8 +91,8 @@ def create_user(data: dict):
     salt = bcrypt.gensalt(rounds=saltRounds)
     hashedPassword = bcrypt.hashpw(password1.encode("utf-8"), salt).decode("utf-8")
     
-    new_user = {"id": len(get_users()) + 1, "username": username, "email": email, "password": hashedPassword, "profile": profile}
-    add_user(new_user)
+    new_user = {"id": len(model.get_users()) + 1, "username": username, "email": email, "password": hashedPassword, "profile": profile}
+    model.add_user(new_user)
     return new_user
 
 def login(data: dict):
@@ -108,7 +108,7 @@ def login(data: dict):
     if len(email) < 5:
         raise HTTPException(status_code=400, detail="email_too_short")
     
-    user = get_user_by_email(email)
+    user = model.get_user_by_email(email)
     if not user:
         raise HTTPException(status_code=401, detail="unauthorized")
     if not password:
@@ -125,7 +125,7 @@ def change_password(data: dict):
     user_id = data.get("user_id")
     password1 = data.get("password1")
     password2 = data.get("password2")
-    user = get_user_by_id(user_id)
+    user = model.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")   
     
@@ -160,7 +160,7 @@ def change_password(data: dict):
 def update_profile(data: dict):
     user_id = data.get("user_id")
     profile = data.get("profile")
-    user = get_user_by_id(user_id)
+    user = model.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")   
     
@@ -175,14 +175,14 @@ def update_profile(data: dict):
 def update_username(data: dict):
     user_id = data.get("user_id")
     new_username = data.get("new_username")
-    user = get_user_by_id(user_id)
+    user = model.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")   
     
     # Username validation
     if not new_username:
         raise HTTPException(status_code=400, detail="missing_username")
-    if any(u["username"] == new_username for u in get_users()):
+    if any(u["username"] == new_username for u in model.get_users()):
         raise HTTPException(status_code=403, detail="username_already_exists")
     if " " in new_username:
         raise HTTPException(status_code=400, detail="username_contains_space")
@@ -195,7 +195,7 @@ def update_username(data: dict):
     return "username_updated_successfully"
 
 def delete_user(user_id: int):
-    user = get_user_by_id(user_id)
+    user = model.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="user_not_found")
     delete_user(user)
