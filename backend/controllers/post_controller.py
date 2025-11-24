@@ -1,14 +1,28 @@
 # controllers/post_controller.py
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from datetime import datetime
-import models.post_model as model
+from sqlalchemy.orm import Session
+from models import post_model as model
+from models.post_model import Post
 
-def get_post(post_id: int):
-    if post_id <= 0:
-        raise HTTPException(status_code=400, detail="invalid_post_id")
-    return {"status_code": 200, "data": model.get_posts()}
+def post_to_dict(post: Post) -> dict:
+    return {
+        "id": post.id,
+        "title": post.title,
+        "content": post.content,
+        "author_id": post.author_id,
+        "datetime": post.datetime.isoformat() if post.datetime else None,
+        "image": post.image,
+        "likes": post.likes,
+        "comments": post.comments,
+        "views": post.views,
+    }
 
-def create_post(data: dict):
+def get_post(db: Session, skip: int = 0, limit: int = 20):
+    posts = model.get_posts(db, skip=skip, limit=limit)
+    return [post_to_dict(p) for p in posts]
+
+def create_post(db: Session, data: dict):
     title = data.get("title")
     content = data.get("content")
     author_id = data.get("author_id")
@@ -30,23 +44,25 @@ def create_post(data: dict):
     if image and len(image) > 200:
         raise HTTPException(status_code=400, detail="image_url_too_long")
     
-    new_post = {
-        "id": len(model.get_posts()) + 1,
-        "title": title,
-        "content": content,
-        "author_id": author_id,
-        "datetime": datetime.now().isoformat(),
-        "image": image,
-        "likes": 0,
-        "comments": 0,
-        "views": 0
-    }
+    try:
+        post = model.create_post(
+            db=db,
+            title=title,
+            content=content,
+            author_id=author_id,
+            image=image,
+        )
+    except Exception as e:
+        # DB 에러 발생 시 500으로 래핑
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"failed_to_create_post: {str(e)}",
+        )
 
-    model.add_post(new_post)
-    return {"status_code": 201, "data": new_post}
+    return {"status_code": 201, "data": post_to_dict(post)}
 
-def update_post(post_id: int, data: dict):
-    post_item = model.get_post_by_id(post_id)
+def update_post(db: Session, post_id: int, data: dict):
+    post_item = model.get_post_by_id(db, post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
     
@@ -57,54 +73,78 @@ def update_post(post_id: int, data: dict):
     if title:
         if len(title) > 26:
             raise HTTPException(status_code=400, detail="title_too_long")
-        post_item["title"] = title
+        post_item.title = title 
 
     if content:
-        post_item["content"] = content
+        post_item.content = content
 
     if image:
         if len(image) > 200:
             raise HTTPException(status_code=400, detail="image_url_too_long")
-        post_item["image"] = image
+        post_item.image= image
 
+    db.commit()
+    db.refresh(post_item)
+    
     return {"status_code": 200, "data": post_item}
 
-def delete_post(post_id: int):
-    post_item = model.get_post_by_id(post_id)
+def delete_post(db: Session, post_id: int):
+    post_item = model.get_post_by_id(db, post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
     
-    delete_post(post_item)
+    ok = model.delete_post(db, post_id)
+    if not ok:
+        raise HTTPException(status_code=500, detail="failed_to_delete_post")
+
     return {"status_code": 204, "data": "post_deleted_successfully"}
 
-# update post comments count when comment is created or deleted
-def update_comments_count(post_id: int, isComment: bool):
-    post_item = model.get_post_by_id(post_id)
-    if not post_item:
-        return 0
-    if isComment:
-        post_item["comments"] += 1
-    elif not isComment:
-        post_item["comments"] -= 1
-    return "Comment count Updated."
-
-def update_likes_count(post_id: int, islike: bool):
-    post_item = model.get_post_by_id(post_id)
-    
+def update_comments_count(db: Session, post_id: int, isComment: bool):
+    """
+    댓글 개수 증가/감소 (댓글 추가/삭제 시 호출)
+    """
+    post_item = model.get_post_by_id(db, post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
+
+    if isComment:
+        post_item.comments += 1
+    else:
+        post_item.comments = max(0, post_item.comments - 1)
+
+    db.commit()
+    db.refresh(post_item)
+    
+    return {"status_code": 200, "data": "Comment count Updated."}
+
+def update_likes_count(db: Session, post_id: int, islike: bool):
+    """
+    좋아요 개수 증가/감소
+    """
+    post_item = model.get_post_by_id(db, post_id)
+    if not post_item:
+        raise HTTPException(status_code=404, detail="post_not_found")
+
     if islike:
-        post_item['likes'] += 1
-    elif not islike:
-        post_item['likes'] -= 1
+        post_item.likes += 1
+    else:
+        post_item.likes = max(0, post_item.likes - 1)
+    
+    db.commit()
+    db.refresh(post_item)
     
     return {"status_code": 200, "data": "post_likes_upated_successfully."}
 
-def update_views_count(post_id: int):
-    post_item = model.get_post_by_id(post_id)
-    
+def update_views_count(db: Session, post_id: int):
+    """
+    조회수 증가
+    """
+    post_item = model.get_post_by_id(db, post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
-    post_item['views'] += 1
-    
+
+    post_item.views += 1
+    db.commit()
+    db.refresh(post_item)
+
     return {"status_code": 200, "data": "post_views_upated_successfully."}
