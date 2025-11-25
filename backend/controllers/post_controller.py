@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from models import post_model as model
 from models.post_model import Post
+from typing import Optional
 
 def post_to_dict(post: Post) -> dict:
     return {
@@ -66,27 +67,28 @@ def update_post(db: Session, post_id: int, data: dict):
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
     
-    title = data.get("title")
-    content = data.get("content")
-    image = data.get("image")
+    title: Optional[str] = data.get("title", None)
+    content: Optional[str] = data.get("content", None)
+    image: Optional[str] = data.get("image", None)
 
-    if title:
-        if len(title) > 26:
+    if title is not None and len(title) > 26:
             raise HTTPException(status_code=400, detail="title_too_long")
-        post_item.title = title 
-
-    if content:
-        post_item.content = content
-
-    if image:
-        if len(image) > 200:
+        
+    if image is not None and len(image) > 200:
             raise HTTPException(status_code=400, detail="image_url_too_long")
-        post_item.image= image
-
-    db.commit()
-    db.refresh(post_item)
     
-    return {"status_code": 200, "data": post_item}
+    updated_post = model.update_post(
+        db=db,
+        post_id=post_id,
+        title=title,
+        content=content,
+        image=image
+    )
+
+    if not updated_post:
+        raise HTTPException(status_code=500, detail="failed_to_update_post")
+    
+    return {"status_code": 200, "data": post_to_dict(updated_post)}
 
 def delete_post(db: Session, post_id: int):
     post_item = model.get_post_by_id(db, post_id)
@@ -101,50 +103,54 @@ def delete_post(db: Session, post_id: int):
 
 def update_comments_count(db: Session, post_id: int, isComment: bool):
     """
-    댓글 개수 증가/감소 (댓글 추가/삭제 시 호출)
+    댓글 개수 변경 컨트롤러
     """
     post_item = model.get_post_by_id(db, post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
 
-    if isComment:
-        post_item.comments += 1
-    else:
-        post_item.comments = max(0, post_item.comments - 1)
+    updated_post = model.update_comments_count(db, post_id, isComment)
 
-    db.commit()
-    db.refresh(post_item)
-    
-    return {"status_code": 200, "data": "Comment count Updated."}
+    if not updated_post:
+        raise HTTPException(status_code=500, detail="failed_to_update_comment_count")
 
-def update_likes_count(db: Session, post_id: int, islike: bool):
+    return {
+        "status_code": 200,
+        "data": f"comment_count_updated_to_{updated_post.comments}"
+    }
+
+def update_likes_count(db: Session, post_id: int, isLike: bool):
     """
-    좋아요 개수 증가/감소
+    좋아요 개수 변경 컨트롤러
     """
     post_item = model.get_post_by_id(db, post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
 
-    if islike:
-        post_item.likes += 1
-    else:
-        post_item.likes = max(0, post_item.likes - 1)
-    
-    db.commit()
-    db.refresh(post_item)
-    
-    return {"status_code": 200, "data": "post_likes_upated_successfully."}
+    updated_post = model.update_likes_count(db, post_id, isLike)
+
+    if not updated_post:
+        raise HTTPException(status_code=500, detail="failed_to_update_like_count")
+
+    return {
+        "status_code": 200,
+        "data": f"like_count_updated_to_{updated_post.likes}"
+    }
 
 def update_views_count(db: Session, post_id: int):
     """
-    조회수 증가
+    조회수 증가 컨트롤러
     """
     post_item = model.get_post_by_id(db, post_id)
     if not post_item:
         raise HTTPException(status_code=404, detail="post_not_found")
 
-    post_item.views += 1
-    db.commit()
-    db.refresh(post_item)
+    updated_post = model.update_views_count(db, post_id)
 
-    return {"status_code": 200, "data": "post_views_upated_successfully."}
+    if not updated_post:
+        raise HTTPException(status_code=500, detail="failed_to_update_views_count")
+
+    return {
+        "status_code": 200,
+        "data": f"views_updated_to_{updated_post.views}"
+    }

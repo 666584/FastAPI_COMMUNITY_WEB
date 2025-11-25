@@ -18,7 +18,6 @@ async def get_posts(skip: int = 0, limit: int = 20, db: Session = Depends(get_db
 async def get_post_by_id(post_id: int, db: Session = Depends(get_db)):
     post = controller.model.get_post_by_id(db, post_id)
     if not post:
-        # 컨트롤러 스타일에 맞춰 404 처리
         raise HTTPException(status_code=404, detail="post_not_found")
     return controller.post_to_dict(post)
 
@@ -57,9 +56,24 @@ async def update_likes_count(
 ):
     return controller.update_likes_count(db, post_id, islike)
 
-
-# 조회수 증가: PATCH /posts/{post_id}/views
+# 조회수 증가/감소: PATCH /posts/{post_id}/views
 @router.patch("/{post_id}/views")
+async def update_views_count(
+    post_id: int,
+    db: Session = Depends(get_db),
+):
+    return controller.update_views_count(db, post_id)
+
+# 조회수 조회: GET /posts/{post_id}/views
+@router.get("/{post_id}/views")
+async def update_views_count(
+    post_id: int,
+    db: Session = Depends(get_db),
+):
+    return controller.update_views_count(db, post_id)
+
+# 좋아요 수 조회: GET /posts/{post_id}/likes
+@router.get("/{post_id}/likes")
 async def update_views_count(
     post_id: int,
     db: Session = Depends(get_db),

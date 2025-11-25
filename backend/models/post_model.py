@@ -6,9 +6,9 @@ from datetime import datetime
 from database import Base
 
 
-# 🔹 1) 실제 DB 테이블과 연결되는 ORM 모델
+# 1) 실제 DB 테이블과 연결되는 ORM 모델
 class Post(Base):
-    __tablename__ = "posts"  # MySQL에 생성될 테이블 이름
+    __tablename__ = "posts"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     title = Column(String(100), nullable=False)
@@ -82,7 +82,6 @@ def update_post(
     db.refresh(post)
     return post
 
-
 def delete_post(db: Session, post_id: int) -> bool:
     """
     글 삭제
@@ -94,3 +93,57 @@ def delete_post(db: Session, post_id: int) -> bool:
     db.delete(post)
     db.commit()
     return True
+
+def update_comments_count(db: Session, post_id: int, increase: bool):
+    """
+    DB에서 댓글 수 증가 / 감소 처리
+    """
+    post = get_post_by_id(db, post_id)
+    
+    if not post:
+        return None
+
+    if increase:
+        post.comments += 1
+    else:
+        post.comments = max(0, post.comments - 1)
+
+    db.commit()
+    db.refresh(post)
+
+    return post
+
+def update_views_count(db: Session, post_id: int):
+    """
+    게시글 조회수 증가 처리
+    """
+    post = get_post_by_id(db, post_id)
+
+    if not post:
+        return None
+
+    post.views += 1
+
+    db.commit()
+    db.refresh(post)
+
+    return post
+
+def update_likes_count(db: Session, post_id: int, increase: bool):
+    """
+    게시글 좋아요 증가 / 감소 처리
+    """
+    post = get_post_by_id(db, post_id)
+
+    if not post:
+        return None
+
+    if increase:
+        post.likes += 1
+    else:
+        post.likes = max(0, post.likes - 1)
+
+    db.commit()
+    db.refresh(post)
+
+    return post
