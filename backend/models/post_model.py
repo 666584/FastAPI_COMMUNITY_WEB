@@ -19,6 +19,7 @@ class Post(Base):
     likes = Column(Integer, default=0)
     comments = Column(Integer, default=0)
     views = Column(Integer, default=0)
+    category = Column(String(50), nullable=False)
 
 def get_posts(db: Session, skip: int = 0, limit: int = 20):
     """
@@ -39,6 +40,7 @@ def create_post(
     title: str,
     content: str,
     author_id: int,
+    category: str,
     image: Optional[str] = None,
 ):   
     """
@@ -49,6 +51,7 @@ def create_post(
         content=content,
         author_id=author_id,
         image=image,
+        category=category,
         # datetime은 모델에서 default=datetime.now 로 설정되어 있으면 자동 세팅
         # likes / comments / views 도 default=0 이면 자동 세팅
     )
@@ -64,6 +67,7 @@ def update_post(
     title: Optional[str] = None,
     content: Optional[str] = None,
     image: Optional[str] = None,
+    category: Optional[str] = None,
 ):
     """
     글 수정
@@ -78,6 +82,8 @@ def update_post(
         post.content = content
     if image is not None:
         post.image = image
+    if category is not None:
+        post.category = category
     db.commit()
     db.refresh(post)
     return post

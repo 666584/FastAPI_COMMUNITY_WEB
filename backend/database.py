@@ -6,7 +6,7 @@ import os
 
 load_dotenv()
 
-USERNAME = os.getenv("USERNAME")
+USERNAME = "root"
 PASSWORD = os.getenv("PASSWORD")
 HOST = os.getenv("HOST")
 PORT = os.getenv("PORT")

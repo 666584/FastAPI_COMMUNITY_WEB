@@ -16,7 +16,6 @@ class User(Base):
     username = Column(String(10), unique=True, index=True, nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=False)
     password = Column(String(255), nullable=False)  # 해시된 비밀번호 저장
-    profile = Column(String(500), nullable=False)
 
 
 # 비밀번호 해시 함수
@@ -51,7 +50,6 @@ def create_user(
     username: str,
     email: str,
     raw_password: str,
-    profile: str,
 ):
     """
     새 사용자 생성 (비밀번호는 여기서 해시)
@@ -62,7 +60,6 @@ def create_user(
         username=username,
         email=email,
         password=hashed_pw,
-        profile=profile,
     )
     db.add(user)
     db.commit()
@@ -77,7 +74,6 @@ def update_user(
     username: Optional[str] = None,
     email: Optional[str] = None,
     raw_password: Optional[str] = None,
-    profile: Optional[str] = None,
 ):
     user = get_user_by_id(db, user_id)
     if not user:
@@ -89,8 +85,6 @@ def update_user(
         user.email = email
     if raw_password is not None:
         user.password = hash_pw(raw_password)
-    if profile is not None:
-        user.profile = profile
 
     db.commit()
     db.refresh(user)

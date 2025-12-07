@@ -40,14 +40,6 @@ async def change_password(data: dict, db: Session = Depends(get_db)):
     return controller.change_password(db, data)
 
 
-@router.put("/update_profile")
-async def update_profile(data: dict, db: Session = Depends(get_db)):
-    """
-    프로필 정보 수정
-    """
-    return controller.update_profile(db, data)
-
-
 @router.patch("/update_username")
 async def update_username(data: dict, db: Session = Depends(get_db)):
     """

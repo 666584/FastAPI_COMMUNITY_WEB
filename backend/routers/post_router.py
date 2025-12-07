@@ -16,10 +16,7 @@ async def get_posts(skip: int = 0, limit: int = 20, db: Session = Depends(get_db
 # 게시글 단일 조회: GET /posts/{post_id}
 @router.get("/{post_id}")
 async def get_post_by_id(post_id: int, db: Session = Depends(get_db)):
-    post = controller.model.get_post_by_id(db, post_id)
-    if not post:
-        raise HTTPException(status_code=404, detail="post_not_found")
-    return controller.post_to_dict(post)
+    return controller.get_post_by_id(db, post_id)
 
 
 # 게시글 생성: POST /posts/create

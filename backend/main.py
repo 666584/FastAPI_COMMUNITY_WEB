@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from routers.user_router import router as user_router
 from routers.post_router import router as post_router
 from routers.comment_router import router as comment_router
@@ -6,11 +7,23 @@ from routers.ai_chat_router import router as ai_chat_router
 from database import test_connection, Base, engine
 
 app = FastAPI()
+
+origins = [
+    "http://localhost:5173"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(user_router)
 app.include_router(post_router)
 app.include_router(comment_router)
 app.include_router(ai_chat_router)
-
 
 @app.get("/db-check")
 def check_db():

@@ -21,15 +21,7 @@ def get_user(db: Session, user_id: int):
 def create_user(db: Session, data: dict):
     username = data.get("username")
     email = data.get("email")
-    password1 = data.get("password1")
-    password2 = data.get("password2")
-    profile = data.get("profile")
-
-    # -------- Profile validation --------
-    if not profile:
-        raise HTTPException(status_code=400, detail="missing_profile")
-    if profile and len(profile) > 500:
-        raise HTTPException(status_code=400, detail="profile_too_long")
+    password = data.get("password")
 
     # -------- Username validation --------
     if not username:
@@ -46,27 +38,21 @@ def create_user(db: Session, data: dict):
         raise HTTPException(status_code=403, detail="username_already_exists")
 
     # -------- Password validation --------
-    if not password1:
+    if not password:
         raise HTTPException(status_code=400, detail="missing_password")
-    if not password2:
-        raise HTTPException(status_code=400, detail="missing_password_confirmation")
-    if password1 != password2:
-        raise HTTPException(status_code=400, detail="passwords_do_not_match")
 
-    if len(password1) < 8:
+    if len(password) < 8:
         raise HTTPException(status_code=400, detail="password_too_short")
-    if len(password1) > 20:
+    if len(password) > 20:
         raise HTTPException(status_code=400, detail="password_too_long")
-    if " " in password1:
+    if " " in password:
         raise HTTPException(status_code=400, detail="password_contains_space")
-    if not any(c.islower() for c in password1):
+    if not any(c.islower() for c in password):
         raise HTTPException(status_code=400, detail="password_missing_lowercase")
-    if not any(c.isupper() for c in password1):
+    if not any(c.isupper() for c in password):
         raise HTTPException(status_code=400, detail="password_missing_uppercase")
-    if not any(c.isdigit() for c in password1):
+    if not any(c.isdigit() for c in password):
         raise HTTPException(status_code=400, detail="password_missing_digit")
-    if not any(c in "!@#$%^&*()-_=+[]{}|;:'\",.<>?/`~" for c in password1):
-        raise HTTPException(status_code=400, detail="password_missing_special_character")
 
     # -------- Email validation --------
     if not email:
@@ -101,8 +87,7 @@ def create_user(db: Session, data: dict):
         db=db,
         username=username,
         email=email,
-        raw_password=password1,  # 여기서는 RAW 패스워드 전달 → model에서 해시
-        profile=profile,
+        raw_password=password,  # 여기서는 RAW 패스워드 전달 → model에서 해시
     )
     return new_user
 
@@ -173,27 +158,6 @@ def change_password(db: Session, data: dict):
     db.refresh(user)
 
     return {"status_code": 200, "detail": "password_changed_successfully"}
-
-
-def update_profile(db: Session, data: dict):
-    user_id = data.get("user_id")
-    profile = data.get("profile")
-
-    user = model.get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="user_not_found")
-
-    if not profile:
-        raise HTTPException(status_code=400, detail="missing_profile")
-    if len(profile) > 500:
-        raise HTTPException(status_code=400, detail="profile_too_long")
-
-    updated_user = model.update_user(db, user_id=user_id, profile=profile)
-    if not updated_user:
-        raise HTTPException(status_code=500, detail="failed_to_update_profile")
-
-    return {"status_code": 200, "detail": "profile_updated_successfully"}
-
 
 def update_username(db: Session, data: dict):
     user_id = data.get("user_id")

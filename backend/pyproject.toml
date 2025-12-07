@@ -8,5 +8,7 @@ dependencies = [
     "pydantic, 
     "bcrypt",
     "ollama",
-    "sqlalchemy>=2.0.44"
+    "sqlalchemy>=2.0.44",
+    "pymysql",
+    "cryptography"
 ]
