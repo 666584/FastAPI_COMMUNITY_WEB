@@ -43,6 +43,9 @@ def get_user_by_email(db: Session, email: str):
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
 
+def get_username_by_id(db: Session, user_id: int) -> Optional[str]:
+    user = get_user_by_id(db, user_id)
+    return user.username if user else None
 
 # 새 사용자 생성
 def create_user(

@@ -27,7 +27,7 @@ class NewsSummaryRequest(BaseModel):
 class NewsSummaryResponse(BaseModel):
     title: str
     url: str
-    summary: str
+    summary: list[str]
 
 class NewsSummaryGeminiRequest(BaseModel):
     title: str

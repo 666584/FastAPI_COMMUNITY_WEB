@@ -9,19 +9,20 @@ from models.post_model import update_comments_count
 class Comment(Base):
     __tablename__ = "comments"
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    author_id = Column(Integer, nullable=False)
+    author_id = Column(Integer, nullable=True)
     post_id = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
-    datetime = Column(DateTime, default=datetime.now)
+    datetime = Column(DateTime, default=datetime.utcnow)
 
 def get_comments_by_post_id(db: Session, post_id: int, skip: int = 0, limit: int = 20):
     """
     특정 게시글(post_id)의 전체 댓글 ORM 객체 반환
     """
+    
     comments = (
         db.query(Comment)
         .filter(Comment.post_id == post_id)
-        .order_by(Comment.datetime.asc())
+        .order_by(Comment.datetime.desc())
         .offset(skip)
         .limit(limit)
         .all()

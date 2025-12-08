@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Dict
+from typing import Optional
 from fastapi import HTTPException, status
 import requests
 import re
@@ -10,21 +10,17 @@ try:
 except Exception:
     BeautifulSoup = None
 
-from ollama import chat
-
 SYSTEM_PROMPT = (
     "당신은 한국어로 간결하고 정확하게 뉴스를 요약하는 요약 전문가입니다. "
-    "출처(URL)과 제목이 주어지면 핵심 내용을 세 문장 내외로 요약하되, "
+    "제목, URL, 기사 본문, 사용자 의견 등이 주어지면 핵심 내용을 세 문장 내외로 요약하되, "
     "중요한 숫자/사실/결과는 명확하게 포함하세요. 불확실한 정보는 추정하지 말고 "
     "요약문은 한국어로 작성하세요."
 )
 
+DEFAULT_IMAGE_URL = "https://images.unsplash.com/photo-1569025698421-8822a1a07603"
+
 
 def fetch_article_text(url: str, max_chars: int = 20000) -> Optional[str]:
-    """
-    URL에서 기사 본문을 시도해 추출하여 문자열로 반환합니다.
-    실패하면 None을 반환합니다.
-    """
     try:
         headers = {"User-Agent": "Mozilla/5.0 (compatible; NewsSummaryBot/1.0)"}
         resp = requests.get(url, timeout=8, headers=headers)
@@ -35,12 +31,17 @@ def fetch_article_text(url: str, max_chars: int = 20000) -> Optional[str]:
             soup = BeautifulSoup(html, "html.parser")
             article = soup.find("article")
             if article:
-                parts = [t.get_text(separator=" ", strip=True) for t in article.find_all(["p", "h1", "h2", "h3"])]
+                parts = [
+                    t.get_text(separator=" ", strip=True)
+                    for t in article.find_all(["p", "h1", "h2", "h3"])
+                ]
             else:
-                parts = [p.get_text(separator=" ", strip=True) for p in soup.find_all("p")]
+                parts = [
+                    p.get_text(separator=" ", strip=True)
+                    for p in soup.find_all("p")
+                ]
             joined = "\n\n".join([p for p in parts if p])
         else:
-            # 간단 fallback: 태그 제거
             joined = re.sub(r"<script.*?>.*?</script>", "", html, flags=re.S | re.I)
             joined = re.sub(r"<style.*?>.*?</style>", "", joined, flags=re.S | re.I)
             joined = re.sub(r"<[^>]+>", " ", joined)
@@ -53,38 +54,122 @@ def fetch_article_text(url: str, max_chars: int = 20000) -> Optional[str]:
     except Exception:
         return None
 
-def summarize_news(title: str,
-                          url: str):
 
-    # 환경변수에서 키 가져오기 (GEMINI_API_KEY 사용)
+def extract_article_image(url: str) -> Optional[str]:
+    if not BeautifulSoup:
+        return None
+
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; NewsSummaryBot/1.0)"}
+        resp = requests.get(url, timeout=8, headers=headers)
+        resp.raise_for_status()
+        html = resp.text
+        soup = BeautifulSoup(html, "html.parser")
+
+        og = soup.find("meta", property="og:image")
+        if og and og.get("content"):
+            return og["content"]
+
+        tw = soup.find("meta", attrs={"name": "twitter:image"})
+        if tw and tw.get("content"):
+            return tw["content"]
+
+        img = soup.find("img")
+        if img and img.get("src"):
+            return img["src"]
+
+        return None
+    except Exception:
+        return None
+
+
+def pick_related_image(title: str, opinion: Optional[str] = None) -> str:
+    """
+    URL에서 이미지를 못 가져온 경우,
+    제목 + opinion을 합쳐서 주제 추정 후 관련 이미지 URL 리턴
+    """
+    base = (title or "") + " " + (opinion or "")
+    text = base.lower()
+
+    if any(k in text for k in ["금리", "기준금리", "채권"]):
+        return "https://source.unsplash.com/featured/?interest,rate,finance"
+    if any(k in text for k in ["환율", "달러", "달러-원", "외환"]):
+        return "https://source.unsplash.com/featured/?forex,currency,usd,krw"
+    if any(k in text for k in ["주식", "코스피", "코스닥", "etf"]):
+        return "https://source.unsplash.com/featured/?stock,chart,market"
+    if any(k in text for k in ["부동산", "아파트", "주택", "전세"]):
+        return "https://source.unsplash.com/featured/?realestate,building,city"
+    if any(k in text for k in ["비트코인", "암호화폐", "코인", "crypto"]):
+        return "https://source.unsplash.com/featured/?bitcoin,crypto,blockchain"
+    if any(k in text for k in ["경제", "물가", "경기", "성장률", "인플레이션"]):
+        return "https://source.unsplash.com/featured/?economy,macro,finance"
+    if any(k in text for k in ["ai", "인공지능", "테크", "기술"]):
+        return "https://source.unsplash.com/featured/?technology,ai,data"
+
+    return DEFAULT_IMAGE_URL
+
+
+def summarize_news(
+    title: str,
+    url: Optional[str] = None,
+    opinion: Optional[str] = None,
+):
+    """
+    1) url 있으면:
+       - 기사 본문 텍스트, 메타 이미지 최대한 활용
+    2) url 없거나, 기사 본문/이미지 추출 실패 시:
+       - 항상 title + opinion 기반으로 요약 + 관련 이미지 선택
+    """
     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    max_items = 3
+
+    article_text: Optional[str] = None
+    article_image: Optional[str] = None
+
+    # 1) URL 기반 정보 시도
+    if url:
+        article_text = fetch_article_text(url)
+        article_image = extract_article_image(url)
+
+    # 2) LLM 컨텍스트 구성 (항상 title + opinion 우선)
+    context_parts = [f"제목: {title}"]
+
+    if url and article_text:
+        # URL 있고 본문도 있으면: 기사 본문 + (참고용 opinion)
+        context_parts.append(f"URL: {url}")
+        context_parts.append(f"기사 본문 일부:\n{article_text[:4000]}")
+        if opinion:
+            context_parts.append(f"사용자 의견(참고용):\n{opinion}")
+    else:
+        # URL이 없거나 / 본문이 없으면: title + opinion만으로 요약
+        if url and not article_text:
+            context_parts.append(f"URL: {url} (본문 추출 실패)")
+        if opinion:
+            context_parts.append(f"사용자 의견:\n{opinion}")
+        # opinion이 없어도 일부 사이트는 있을 수 있지만,
+        # 그래도 최소한 제목은 항상 포함되어 있음 (기본)
+
+    context_block = "\n\n".join(context_parts)
 
     full_prompt = f"""{SYSTEM_PROMPT}
 
-                    제목: {title}
-                    URL: {url}
+{context_block}
 
-                    다음 형식으로 정확히 4개의 항목을 생성하세요.
-                    각 항목은 한 줄로 작성하고, 번호는 '1.' ~ '4.' 형태로 표기하세요.
-                    전체 요약은 한국어로, 각 항목은 최대 800자 이내로 작성하세요.
+다음 형식으로 정확히 {max_items}개의 항목을 생성하세요.
+각 항목은 한 줄로 작성하고, 번호는 '1.' ~ '{max_items}.' 형태로 표기하세요.
+전체 요약은 한국어로, 각 항목은 최대 800자 이내로 작성하세요.
 
-                    예시:
-                    1. 요약문1
-                    2. 요약문2
-                    3. 요약문3
-                    4. 요약문4
-                    """
+예시:
+1. 요약문1
+2. 요약문2
+3. 요약문3
+"""
+
+    # 3) Gemini 호출
     try:
         resp = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=[
-                {
-                    "role": "user",
-                    "parts": [
-                        {"text": full_prompt}
-                    ],
-                }
-            ],
+            contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
         )
     except Exception as e:
         raise HTTPException(
@@ -92,70 +177,64 @@ def summarize_news(title: str,
             detail=f"gemini_request_failed: {str(e)}",
         )
 
-    # ------------------------
-    # 1) Gemini 응답에서 텍스트 추출
-    # ------------------------
+    # 4) 텍스트 추출
     text = None
-
-    # 가장 단순: SDK가 resp.text 제공하는 경우
     if hasattr(resp, "text") and resp.text:
         text = resp.text
-
-    # 후보(candidates) 구조에서 꺼내기 (멀티모달/복잡 응답 대비)
     if not text and getattr(resp, "candidates", None):
-        first = resp.candidates[0]
-        content = getattr(first, "content", None)
+        cand = resp.candidates[0]
+        content = getattr(cand, "content", None)
         if content and getattr(content, "parts", None):
-            for part in content.parts:
-                # 텍스트 파트 찾기
-                if hasattr(part, "text") and part.text:
-                    text = part.text
+            for p in content.parts:
+                if hasattr(p, "text") and p.text:
+                    text = p.text
                     break
 
     if not text:
-        raise HTTPException(
-            status_code=500,
-            detail="failed_to_extract_gemini_output",
-        )
+        raise HTTPException(status_code=500, detail="failed_to_extract_gemini_output")
 
-    content = text.strip()
+    raw = text.strip()
 
-    # ------------------------
-    # 2) 최대 4줄로 포맷 강제 
-    # ------------------------
-    lines = [l.strip() for l in re.split(r"\n+", content) if l.strip()]
+    # 5) 정확히 max_items 줄로 맞추기
+    lines = [l.strip() for l in re.split(r"\n+", raw) if l.strip()]
 
-    if len(lines) < 4:
+    if len(lines) < max_items:
         sentences = [
             s.strip()
-            for s in re.split(r"(?<=[\.\?\!]|다\.)\s+", content)
+            for s in re.split(r"(?<=[\.\?\!]|다\.)\s+", raw)
             if s.strip()
         ]
-        if len(sentences) >= 4:
-            lines = sentences[:4]
+        if len(sentences) >= max_items:
+            lines = sentences[:max_items]
         else:
-            n = len(content)
+            n = len(raw)
             if n == 0:
-                lines = [""] * 4
+                lines = [""] * max_items
             else:
                 parts = []
-                for i in range(4):
-                    start = i * n // 4
-                    end = (i + 1) * n // 4
-                    parts.append(content[start:end].strip())
-                lines = [p for p in parts if p]
-                while len(lines) < 4:
-                    lines.append(lines[-1] if lines else "")
+                for i in range(max_items):
+                    start = i * n // max_items
+                    end = (i + 1) * n // max_items
+                    parts.append(raw[start:end].strip())
+                lines = parts
+                while len(lines) < max_items:
+                    lines.append("")
 
-    normalized_lines = []
-    for ln in lines[:4]:
-        ln_stripped = re.sub(r"^\s*\d+[\.\)]\s*", "", ln)
-        normalized_lines.append(ln_stripped.replace("\n", " ").strip())
+    normalized: list[str] = []
+    for ln in lines[:max_items]:
+        ln = re.sub(r"^\s*\d+[\.\)]\s*", "", ln)
+        normalized.append(ln.replace("\n", " ").strip())
 
-    numbered = "\n".join(f"{i+1}. {normalized_lines[i]}" for i in range(4))
+    # 6) 최종 이미지 URL 결정
+    if article_image:
+        final_image_url = article_image
+    else:
+        # URL이 없거나, 기사 이미지 못 찾으면: 제목 + opinion으로 관련 이미지 추론
+        final_image_url = pick_related_image(title, opinion)
 
     return {
         "title": title,
         "url": url,
-        "summary": numbered
+        "summary": normalized,        # 요약 3개 리스트
+        "image_url": final_image_url, # 기사 or 관련 이미지
     }

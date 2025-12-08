@@ -7,15 +7,14 @@ from controllers import comment_controller as controller
 router = APIRouter(prefix="/comments")
 
 @router.get("/{post_id}")
-async def get_comments(comment_id: int):
-    return controller.get_comments(comment_id)
+async def get_comments(post_id: int, db: Session = Depends(get_db)):
+    return controller.get_comments(db, post_id)
 
-@router.post("/{post_id}/create", status_code=201)
+@router.post("/create", status_code=201)
 async def create_comment(
-    post_id: int, 
     data: dict = Body(...),
     db: Session = Depends(get_db)):
-    return controller.create_comment(db, post_id, data)
+    return controller.create_comment(db, data)
 
 @router.patch("/{comment_id}/update")
 async def update_comment(

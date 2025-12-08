@@ -7,6 +7,7 @@ from models import user_model
 from models.post_model import Post
 from models.user_model import User
 from typing import Optional
+from controllers.ai_chat_controller import summarize_news
 
 ALLOWED_CATEGORIES = ["금리", "환율", "주식", "부동산", "경제정책", "암호화폐"]
 
@@ -21,12 +22,15 @@ def post_to_dict(post: Post) -> dict:
         "comments": post.comments,
         "views": post.views,
         "category": getattr(post, "category", None),
+        "url": getattr(post, "url", None),
+        "summary":post.summary if hasattr(post, "summary") else None,
     }
 
 def get_post(db: Session, skip: int = 0, limit: int = 20):
     posts = (
         db.query(Post, User.username)
         .join(User, User.id == Post.author_id)
+        .order_by(Post.datetime.desc())
         .offset(skip)
         .limit(limit)
         .all()
@@ -58,13 +62,15 @@ def create_post(db: Session, data: dict):
     title = data.get("title")
     content = data.get("content")
     author_id = data.get("author_id")
-    image = data.get("image")
+    image: Optional[str] = data.get("image", None)
     category = data.get("category")
+    url: Optional[str] = data.get("url", None)
+    summary: Optional[str] = data.get("summary", None)
 
     # Title validation
     if not title:
         raise HTTPException(status_code=400, detail="missing_title")
-    if len(title) > 26:
+    if len(title) > 100:
         raise HTTPException(status_code=400, detail="title_too_long")
 
     # Content validation
@@ -82,6 +88,13 @@ def create_post(db: Session, data: dict):
             raise HTTPException(status_code=400, detail="invalid_category")
         if len(category) > 50:
             raise HTTPException(status_code=400, detail="category_too_long")
+    if not summary:
+        summarize_news_result = summarize_news(title=title, opinion=content, url=url)
+        summary = summarize_news_result.get("summary", [])
+        if not url:
+            url = summarize_news_result.get("url", None)
+        if not image:
+            image = summarize_news_result.get("image_url", None)
     try:
         post = post_model.create_post(
             db=db,
@@ -90,6 +103,8 @@ def create_post(db: Session, data: dict):
             author_id=author_id,
             image=image,
             category=category,
+            url=url,
+            summary=summary
         )
     except Exception as e:
         # DB 에러 발생 시 500으로 래핑
@@ -109,9 +124,10 @@ def update_post(db: Session, post_id: int, data: dict):
     content: Optional[str] = data.get("content", None)
     image: Optional[str] = data.get("image", None)
     category: Optional[str] = data.get("category", None)
+    url: Optional[str] = data.get("url", None)
 
     if title is not None and len(title) > 26:
-            raise HTTPException(status_code=400, detail="title_too_long")
+        raise HTTPException(status_code=400, detail="title_too_long")
         
     if category is not None:
         if category not in ALLOWED_CATEGORIES:
@@ -119,13 +135,22 @@ def update_post(db: Session, post_id: int, data: dict):
         if len(category) > 50:
             raise HTTPException(status_code=400, detail="category_too_long")
     
+    if url is not None and len(url) > 200:
+        raise HTTPException(status_code=400, detail="url_too_long")
+    
+    if url:
+        summarize_news_result = summarize_news(title=title or post_item.title, url=url)
+        summary = summarize_news_result.get("summary", [])   
+
     updated_post = post_model.update_post(
         db=db,
         post_id=post_id,
         title=title,
         content=content,
         image=image,
-        category=category
+        category=category,
+        summary=summary if url else None,
+        url=url
     )
 
     if not updated_post:

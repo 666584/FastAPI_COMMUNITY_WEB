@@ -1,5 +1,5 @@
 # models/post_model.py
-from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
@@ -14,18 +14,20 @@ class Post(Base):
     title = Column(String(100), nullable=False)
     content = Column(Text, nullable=False)
     author_id = Column(Integer, nullable=False)
-    image = Column(String(255), nullable=False)
-    datetime = Column(DateTime, default=datetime.now)
+    image = Column(String(255), nullable=True)
+    datetime = Column(DateTime, default=datetime.utcnow)
     likes = Column(Integer, default=0)
     comments = Column(Integer, default=0)
     views = Column(Integer, default=0)
     category = Column(String(50), nullable=False)
+    url = Column(String(200), nullable=True)
+    summary = Column(JSON, nullable=True) 
 
 def get_posts(db: Session, skip: int = 0, limit: int = 20):
     """
     전체 글 목록 가져오기 (페이징 포함)
     """
-    return db.query(Post).offset(skip).limit(limit).all()
+    return db.query(Post).order_by(Post.datetime.desc()).offset(skip).limit(limit).all()
 
 
 def get_post_by_id(db: Session, post_id: int):
@@ -42,6 +44,8 @@ def create_post(
     author_id: int,
     category: str,
     image: Optional[str] = None,
+    url: Optional[str] = None,
+    summary: Optional[list] = None,
 ):   
     """
     새 글 생성
@@ -52,6 +56,8 @@ def create_post(
         author_id=author_id,
         image=image,
         category=category,
+        url=url,
+        summary=summary,
         # datetime은 모델에서 default=datetime.now 로 설정되어 있으면 자동 세팅
         # likes / comments / views 도 default=0 이면 자동 세팅
     )
@@ -68,6 +74,8 @@ def update_post(
     content: Optional[str] = None,
     image: Optional[str] = None,
     category: Optional[str] = None,
+    url: Optional[str] = None,
+    summary: Optional[list] = None,
 ):
     """
     글 수정
@@ -84,6 +92,10 @@ def update_post(
         post.image = image
     if category is not None:
         post.category = category
+    if url is not None:
+        post.url = url
+    if summary is not None:
+        post.summary = summary
     db.commit()
     db.refresh(post)
     return post
